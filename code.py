@@ -1,5 +1,5 @@
 import argparse, os, numpy as np, math, torchvision.transforms as transforms
-from torchvision.utils import save_image; from torch.utils.data import DataLoader ;from torchvision import datasets; from torch.autograd import Variable
+from torchvision.utils import save_image; from torch.utils.data import DataLoader, Dataset ;from torchvision import datasets; from torch.autograd import Variable
 import torch.nn as nn, torch.nn.functional as F, torch
 import matplotlib.pyplot as plt
 
@@ -318,3 +318,15 @@ self_norm_dataloader = torch.utils.data.DataLoader(
 )
 
 
+# architecture
+w = tf.get_variable('w', [k_h, k_w, input_.get_shape()[-1], output_dim],
+                            initializer=tf.truncated_normal_initializer(stddev=stddev))
+        conv = tf.nn.conv2d(input_, w, strides=[1, d_h, d_w, 1], padding='SAME')
+
+
+
+def convt(h, k, stride, padding, op, d):
+    return (h - 1)*stride - 2*padding + d*(k-1) + op + 1
+
+def conv(h, k, s, p, d):
+    return math.floor((h + 2*p - d*(k - 1) - 1) / s + 1)

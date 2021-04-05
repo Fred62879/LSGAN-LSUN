@@ -23,7 +23,7 @@ parser.add_argument("--lr", type=float, default=0.0002, help="adam: learning rat
 parser.add_argument("--b1", type=float, default=0.5, help="adam: decay of first order momentum of gradient")
 parser.add_argument("--b2", type=float, default=0.999, help="adam: decay of first order momentum of gradient")
 parser.add_argument("--n_cpu", type=int, default=8, help="number of cpu threads to use during batch generation")
-parser.add_argument("--latent_dim", type=int, default=100, help="dimensionality of the latent space")
+parser.add_argument("--latent_dim", type=int, default=1024, help="dimensionality of the latent space")
 parser.add_argument("--img_size", type=int, default=32, help="size of each image dimension")
 parser.add_argument("--channels", type=int, default=1, help="number of image channels")
 parser.add_argument("--sample_interval", type=int, default=1000, help="number of image channels")
@@ -56,6 +56,139 @@ def weights_init_normal(m):
         torch.nn.init.normal_(m.weight.data, 1.0, 0.02)
         torch.nn.init.constant_(m.bias.data, 0.0)
 
+# unstable, from LSGAN paper
+class Generator1(nn.Module):
+    def __init__(self):
+        super(Generator, self).__init__()
+
+        self.s16 = opt.img_size // 16
+        self.bn_1 = nn.BatchNorm2d(256, 0.8)
+        self.relu_1 = nn.ReLU(inplace=True)
+
+        self.l1 = nn.Linear(opt.latent_dim, self.s16 * self.s16 * 256)
+
+        self.model = nn.Sequential(
+            nn.ConvTranspose2d(256, 256, kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.BatchNorm2d(256, 0.8),
+            nn.ReLU(inplace=True),
+
+            nn.ConvTranspose2d(256, 256, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(256, 0.8),
+            nn.ReLU(inplace=True),
+
+            nn.ConvTranspose2d(256, 256, kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.BatchNorm2d(256, 0.8),
+            nn.ReLU(inplace=True),
+
+            nn.ConvTranspose2d(256, 256, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(256, 0.8),
+            nn.ReLU(inplace=True),
+
+            nn.ConvTranspose2d(256, 256, kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.BatchNorm2d(256, 0.8),
+            nn.ReLU(inplace=True),
+
+            nn.ConvTranspose2d(256, 256, kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.BatchNorm2d(256, 0.8),
+            nn.ReLU(inplace=True),
+
+            nn.ConvTranspose2d(256, opt.channels, kernel_size=3, stride=1, padding=1),
+            nn.Tanh()
+        )
+    
+    def forward(self, z):
+        # 1st fully connected layer
+        out = self.l1(z)
+        out = out.view(z.shape[0], 256, self.s16, self.s16)
+        out = self.relu_1(self.bn_1(out))
+
+        # deconv layers
+        image = self.model(out)
+        return image
+
+# stable, upsample removed, replace leakyrelu with relu
+class Generator2(nn.Module):
+    def __init__(self):
+        super(Generator, self).__init__()
+
+        self.init_size = opt.img_size // 4
+        self.l1 = nn.Sequential(nn.Linear(opt.latent_dim, 128 * self.init_size ** 2))
+
+        self.conv_blocks = nn.Sequential(
+            nn.ConvTranspose2d(128, 128, kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.BatchNorm2d(128, 0.8),
+            nn.ReLU(inplace=True),
+
+            nn.ConvTranspose2d(128, 64, kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.BatchNorm2d(64, 0.8),
+            nn.ReLU(inplace=True),
+
+            nn.ConvTranspose2d(64, opt.channels, kernel_size=3, stride=1, padding=1),
+            nn.Tanh(),
+        )
+
+    def forward(self, z):
+        out = self.l1(z)
+        out = out.view(out.shape[0], 128, self.init_size, self.init_size)
+        img = self.conv_blocks(out)
+        return img
+
+# stable, from g2, modified  k, s, p
+class Generator3(nn.Module):
+    def __init__(self):
+        super(Generator, self).__init__()
+
+        self.init_size = opt.img_size // 4
+        self.l1 = nn.Sequential(nn.Linear(opt.latent_dim, 128 * self.init_size ** 2))
+
+        self.conv_blocks = nn.Sequential(
+            nn.ConvTranspose2d(128, 128, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(128, 0.8),
+            nn.ReLU(inplace=True),
+
+            nn.ConvTranspose2d(128, 64, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(64, 0.8),
+            nn.ReLU(inplace=True),
+
+            nn.ConvTranspose2d(64, opt.channels, kernel_size=3, stride=1, padding=1),
+            nn.Tanh(),
+        )
+
+    def forward(self, z):
+        out = self.l1(z)
+        out = out.view(out.shape[0], 128, self.init_size, self.init_size)
+        img = self.conv_blocks(out)
+        return img
+
+# adapt from dcgan tutorial, removed fc layer
+class Generator4(nn.Module):
+    def __init__(self):
+        super(Generator, self).__init__()
+
+        self.conv_blocks = nn.Sequential(
+            nn.ConvTranspose2d(opt.latent_dim, 512, kernel_size=4, stride=1),
+            nn.BatchNorm2d(512, 0.8),
+            nn.ReLU(inplace=True),
+
+            nn.ConvTranspose2d(512, 256, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(256, 0.8),
+            nn.ReLU(inplace=True),
+
+            nn.ConvTranspose2d(256, 128, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(128, 0.8),
+            nn.ReLU(inplace=True),
+
+            nn.ConvTranspose2d(128, 64, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(64, 0.8),
+            nn.ReLU(inplace=True),
+
+            nn.ConvTranspose2d(64, opt.channels, kernel_size=4, stride=2, padding=1),
+            nn.Tanh(),
+        )
+
+    def forward(self, z):
+        img = self.conv_blocks(z)
+        return img
 
 class Generator(nn.Module):
     def __init__(self):
@@ -83,6 +216,66 @@ class Generator(nn.Module):
         img = self.conv_blocks(out)
         return img
 
+# unstable, from lsgan paper
+class Discriminator1(nn.Module):
+    def __init__(self):
+        super(Discriminator, self).__init__()
+
+        # The height and width of downsampled image
+        df_dim = 64
+
+        self.model = nn.Sequential(
+            nn.Conv2d(opt.channels, df_dim, kernel_size=5, stride=2, padding=2),
+            nn.LeakyReLU(0.2, inplace=True),
+
+            nn.Conv2d(df_dim, df_dim * 2, kernel_size=5, stride=2, padding=2),
+            nn.BatchNorm2d(df_dim * 2, 0.8),
+            nn.LeakyReLU(0.2, inplace=True),
+
+            nn.Conv2d(df_dim * 2, df_dim * 4, kernel_size=5, stride=2, padding=2),
+            nn.BatchNorm2d(df_dim * 4, 0.8),
+            nn.LeakyReLU(0.2, inplace=True),
+
+            nn.Conv2d(df_dim * 4, df_dim * 8, kernel_size=5, stride=2, padding=2),
+            nn.BatchNorm2d(df_dim * 8, 0.8),
+            nn.LeakyReLU(0.2, inplace=True)
+        )
+
+        ds_size = opt.img_size // 2 ** 4
+        self.adv_layer = nn.Linear(512 * ds_size ** 2, 1)
+
+    def forward(self, img):
+        out = self.model(img)
+        out = out.view(out.shape[0], -1)
+        validity = self.adv_layer(out)
+
+        return validity
+
+# adapted from dcgan tutorial, removed fc layer
+class Discriminator2(nn.Module):
+    def __init__(self):
+        super(Discriminator, self).__init__()
+
+        def discriminator_block(in_filters, out_filters, bn=True):
+            block = [nn.Conv2d(in_filters, out_filters, 4, 2, 1), nn.LeakyReLU(0.2, inplace=True), nn.Dropout2d(0.25)]
+            if bn:
+                block.append(nn.BatchNorm2d(out_filters, 0.8))
+            return block
+
+        self.model = nn.Sequential(
+            *discriminator_block(opt.channels, 64, bn=False),
+            *discriminator_block(64, 128),
+            *discriminator_block(128, 256),
+            *discriminator_block(256, 512),
+
+            nn.Conv2d(512, opt.channels, 4, 1, 0),
+            nn.Sigmoid()
+        )
+
+    def forward(self, img):
+        validity = self.model(img)
+        validity = validity.view(-1)
+        return validity
 
 class Discriminator(nn.Module):
     def __init__(self):
@@ -177,8 +370,16 @@ for epoch in range(opt.n_epochs):
         gen_imgs = generator(z)
 
         # Loss measures generator's ability to fool the discriminator
-        g_loss = adversarial_loss(discriminator(gen_imgs), valid)
+        real_score = discriminator(real_imgs)
+        fake_score = discriminator(gen_imgs.detach())
 
+        real_score_sorted, _ = torch.sort(torch.reshape(real_score, (1, imgs.shape[0])))
+        fake_score_sorted, _ = torch.sort(torch.reshape(fake_score, (1, imgs.shape[0])))
+
+        # g_loss = adversarial_loss(discriminator(gen_imgs), valid)
+        g_loss = torch.mean((fake_score_sorted - real_score_sorted) ** 2)
+
+        g_losses.append(g_loss)
         g_loss.backward()
         optimizer_G.step()
 
@@ -189,8 +390,8 @@ for epoch in range(opt.n_epochs):
         optimizer_D.zero_grad()
 
         # Measure discriminator's ability to classify real from generated samples
-        real_loss = adversarial_loss(discriminator(real_imgs), valid)
-        fake_loss = adversarial_loss(discriminator(gen_imgs.detach()), fake)
+        real_loss = adversarial_loss(real_score, valid)
+        fake_loss = adversarial_loss(fake_score, fake)
         d_loss = 0.5 * (real_loss + fake_loss)
 
         d_loss.backward()

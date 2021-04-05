@@ -1,0 +1,45 @@
+
+1. train discriminator for a while to make it able to discern random input from real image
+
+
+Generator_paper
+z:    64, 1024             
+a0:   64, 7, 7, 256    - fc layer
+a1_1: 64, 14, 14, 256  - deconv  k=3, stride=2
+a1_2: 64, 14, 14, 256  - deconv  k=3, stride=1
+a2_1: 64, 28, 28, 256  - deconv  k=3, stride=2
+a2_2: 64, 28, 28, 256  - deconv  k=3, stride=1
+a3:   64, 56, 56, 128  - deconv  k=3, stride=2
+a4:   64, 112, 112, 64 - deconv  k=3, stride=2
+a5:   64, 112, 112, 3  - deconv  k=3, stride=1
+
+Discriminator_paper
+image: 64, 112, 112, 3
+a0: 64, 56, 56, 64
+a1: 64, 28, 28, 128
+a2: 64, 14, 14, 256
+a3: 64, 7, 7, 512
+a4: 64, 1
+
+Generator_orig
+z:    64, 100
+a0:   64, 128, 16, 16
+a1:   64, 128, 32, 32  (upsample)
+a2:   64, 128, 32, 32  (conv2d)
+a3:   64, 128, 64, 64  (upsample)
+a4:   64, 64, 64, 64   (conv2d)
+a5:   64, 3, 64, 64    (conv2d)
+
+Discriminator_orig
+image: 64, 3, 64, 64
+a0: 64, 16, 32, 32
+a1: 64, 32, 16, 16
+a2: 64, 64, 8, 8
+a3: 64, 128, 4, 4
+a4: 64, 1
+
+
+
+
+
+
