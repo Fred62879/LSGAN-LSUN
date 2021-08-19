@@ -1,0 +1,12 @@
+
+
+lsgan
+118
+
+
+lsun bedroom
+
+
+train the same thing (generate number before) to generate bedroom
+64 64
+
